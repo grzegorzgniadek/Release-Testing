@@ -8,25 +8,48 @@ on:
 permissions:
   contents: write
   packages: write
-   
+ 
 jobs:
+
   get-version:
     name: Get version from VERSION file
     runs-on: ubuntu-latest
     outputs:
-      VERSION: ${{ steps.version.outputs.version_tag  }}
+      VERSION: ${{ steps.version.outputs.version_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
         with:
           fetch-depth: 0    # fetch all history
 
-      - name: Application Version
+      - name: Set VERSION from latest tag + PR title
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
         id: version
-        uses: paulhatch/semantic-version@v5.4.0
-        with:
-          tag_prefix: "v"
+        run: |
+          set -euo pipefail
 
+          # Latest semver tag already merged into the base branch
+          LATEST=$(git tag --merged "origin/${BASE_REF}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          LATEST=${LATEST:-v0.0.0}
+          IFS=. read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
+          LAST_LOG=$(git log --merges --pretty=format:"%s" "origin/${BASE_REF}" ^"$LATEST" | head -n1)
+
+          if echo "$LAST_LOG" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+            MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0
+          elif echo "$LAST_LOG" | grep -qE '^feat(\(|:)'; then
+            MINOR=$((MINOR+1)); PATCH=0
+          elif echo "$LAST_LOG" | grep -qE '^(fix|deps|chore|ci|build|docs|style|test|refactor)(\(|:)'; then
+            PATCH=$((PATCH+1))
+          fi
+          # otherwise: no release, keep the latest tag's version
+
+          NEW="${MAJOR}.${MINOR}.${PATCH}"
+
+          echo "Latest tag: $LATEST | VERSION: $NEW"
+
+          echo "version_tag=$NEW" >> $GITHUB_OUTPUT
 
   tag:
     name: Create ${{ needs.get-version.outputs.VERSION }} tag
