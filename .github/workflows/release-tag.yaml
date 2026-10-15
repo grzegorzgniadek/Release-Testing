@@ -8,14 +8,13 @@ on:
 permissions:
   contents: write
   packages: write
- 
+   
 jobs:
-
   get-version:
     name: Get version from VERSION file
     runs-on: ubuntu-latest
     outputs:
-      VERSION: ${{ steps.version.outputs.version_tag }}
+      VERSION: ${{ steps.version.outputs.version_tag  }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
@@ -26,30 +25,48 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
           HEAD_REF: ${{ github.head_ref }}
-        id: version
         run: |
           set -euo pipefail
 
           # Latest semver tag already merged into the base branch
-          LATEST=$(git tag --merged "origin/${BASE_REF}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          LATEST=$(git tag --merged "origin/${HEAD_REF}" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
           LATEST=${LATEST:-v0.0.0}
           IFS=. read -r MAJOR MINOR PATCH <<< "${LATEST#v}"
-          LAST_LOG=$(git log --merges --pretty=format:"%s" "origin/${BASE_REF}" ^"$LATEST" | head -n1)
+          TITLE=$(git log -1 --pretty=%s)
 
-          if echo "$LAST_LOG" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
+          if echo "$TITLE" | grep -qE '^[a-z]+(\([^)]*\))?!:'; then
             MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0
-          elif echo "$LAST_LOG" | grep -qE '^feat(\(|:)'; then
+          elif echo "$TITLE" | grep -qE '^feat(\(|:)'; then
             MINOR=$((MINOR+1)); PATCH=0
-          elif echo "$LAST_LOG" | grep -qE '^(fix|deps|chore|ci|build|docs|style|test|refactor)(\(|:)'; then
+          elif echo "$TITLE" | grep -qE '^(fix|deps|chore|ci|build|docs|style|test|refactor)(\(|:)'; then
             PATCH=$((PATCH+1))
           fi
           # otherwise: no release, keep the latest tag's version
 
           NEW="${MAJOR}.${MINOR}.${PATCH}"
+          CURRENT=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || true)
 
-          echo "Latest tag: $LATEST | VERSION: $NEW"
+          echo "Latest tag: $LATEST | PR title: $TITLE | VERSION: ${CURRENT:-<none>} -> $NEW"
 
-          echo "version_tag=$NEW" >> $GITHUB_OUTPUT
+          if [ "$NEW" = "$CURRENT" ]; then
+            echo "VERSION already $NEW, nothing to do"
+          else
+            echo "Updating VERSION to $NEW"
+            echo "$NEW" > VERSION
+          fi
+
+          make release
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "There are changes"
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore: set version to $NEW"
+            git push origin "HEAD:${HEAD_REF}"
+          else
+            echo "Working tree clean"
+            exit 0
+          fi
 
   tag:
     name: Create ${{ needs.get-version.outputs.VERSION }} tag
