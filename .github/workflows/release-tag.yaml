@@ -43,16 +43,8 @@ jobs:
           # otherwise: no release, keep the latest tag's version
 
           NEW="${MAJOR}.${MINOR}.${PATCH}"
-          CURRENT=$(cat VERSION 2>/dev/null | tr -d '[:space:]' || true)
 
-          echo "Latest tag: $LATEST | PR title: $TITLE | VERSION: ${CURRENT:-<none>} -> $NEW"
-
-          if [ "$NEW" = "$CURRENT" ]; then
-            echo "VERSION already $NEW, nothing to do"
-          else
-            echo "Updating VERSION to $NEW"
-            echo "$NEW" > VERSION
-          fi
+          echo "version_tag=$NEW" >> $GITHUB_OUTPUT
 
   tag:
     name: Create ${{ needs.get-version.outputs.VERSION }} tag
