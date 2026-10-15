@@ -69,7 +69,6 @@ jobs:
             echo "$NEW" > VERSION
           fi
 
-          make release
           if [ -n "$(git status --porcelain)" ]; then
             echo "There are changes"
             git config user.name  "github-actions[bot]"
