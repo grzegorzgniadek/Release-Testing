@@ -40,7 +40,7 @@ jobs:
         uses: paulhatch/semantic-version@v5.4.0
         with:
           tag_prefix: "v"
-          enable_prerelease_mode: true
+          enable_prerelease_mode: false
 
       - name: Set VERSION from latest tag + PR title
         env:
