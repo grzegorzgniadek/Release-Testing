@@ -18,13 +18,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
+        with:
+          fetch-depth: 0    # fetch all history
 
       - name: Application Version
         id: version
         uses: paulhatch/semantic-version@v5.4.0
         with:
           tag_prefix: "v"
-          bump_each_commit: true
+
 
   tag:
     name: Create ${{ needs.get-version.outputs.VERSION }} tag
