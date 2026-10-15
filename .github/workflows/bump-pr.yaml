@@ -1,0 +1,66 @@
+name: Version
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, edited, synchronize, reopened, closed]
+
+concurrency:
+  group: version-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  lint-title:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 #v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bump:
+    needs: lint-title
+    # Skip closed events and fork PRs (read-only token on forks)
+    if: >
+      github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0 # needed to see all tags and the base branch
+
+      - name: Application Version
+        id: version
+        uses: paulhatch/semantic-version@v5.4.0
+        with:
+          tag_prefix: "v"
+          enable_prerelease_mode: true
+
+      - name: Set VERSION from latest tag + PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          NEW=${{ steps.version.outputs.version_tag }}
+
+          echo "$NEW" > VERSION
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "There are changes"
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore: set version to $NEW"
+            git push origin "HEAD:${HEAD_REF}"
+          else
+            echo "Working tree clean"
+            exit 0
+          fi
