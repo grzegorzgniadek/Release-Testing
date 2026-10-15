@@ -24,6 +24,7 @@ jobs:
       - name: Set VERSION from latest tag + PR title
         env:
           REF_NAME: ${{ github.ref_name }}
+        id: version
         run: |
           set -euo pipefail
 
